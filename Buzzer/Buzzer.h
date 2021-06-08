@@ -9,7 +9,7 @@ namespace mbed {
             Buzzer (PinName p);
 
             void makeBeep(float freq, std::chrono::microseconds time);
-
+            void makeBeep(float freq);
             void silence();
 
         private:
