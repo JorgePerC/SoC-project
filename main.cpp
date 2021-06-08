@@ -6,6 +6,7 @@
 #include "mbed.h"
 #include "TextLCD/TextLCD.h"
 #include "Keypad/Keypad.h"
+#include "Buzzer/Buzzer.h"
 //#include "RFID-RC522/MFRC522.h"
 
 // Jorge Pérez
@@ -16,11 +17,28 @@ void button();
 void slaveReceive();
 
 int main(){
-    
-    slaveReceive();
-
     // Initialise the digital pin LED1 as an output
     DigitalOut led(LED1);
+    DigitalIn lswitchY (PTB0);
+    Buzzer buzzer (PTB1);
+
+    int i;
+    float freq;
+
+    while (true) {
+
+        if (!lswitchY){
+            buzzer.makeBeep(1.5f, 1000ms);  
+        }else {
+            buzzer.silence();
+        }
+        
+    }
+
+
+    slaveReceive();
+
+    
             // (rs, rw, e, d0, d1, d2, d3, LCDType type=LCD16x2)
     TextLCD lcd (PTA2, PTA4, PTA5, PTD4, PTD5, PTD6, PTD7);
 
