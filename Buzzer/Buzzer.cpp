@@ -24,7 +24,7 @@ void Buzzer::makeBeep(float freq, std::chrono::microseconds time) {
 
 // Buzzer
 void Buzzer::makeBeep(float freq) {
-    Timeout toff;
+    
     pulse.period(1.0/freq);
     pulse.write(0.3);            // 30% duty cycle - Buzzer on
     wait_us(200);

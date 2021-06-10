@@ -7,6 +7,7 @@
 #include "TextLCD/TextLCD.h"
 #include "Keypad/Keypad.h"
 #include "Buzzer/Buzzer.h"
+#include "Transmitter/Transmitter.h"
 //#include "RFID-RC522/MFRC522.h"
 
 // Jorge Pérez
@@ -34,7 +35,6 @@ void printing_State ();
 void pause_State ();
 void succ_pro_State ();
 
-void slaveReceive();
 /*
  ___         _               _   _          
 |   \ ___ __| |__ _ _ _ __ _| |_(_)___ _ _  
@@ -43,20 +43,23 @@ void slaveReceive();
 */
 // LEDS
 DigitalOut led(LED1);
+DigitalOut led2(LED2);
 // Limit Switches
-DigitalIn lswitch_Y (PTB0);
-DigitalIn lswitch_X (PTB0);
+DigitalIn lswitch_Y (PTB0); // FIX
+DigitalIn lswitch_X (PTB1); // FIX
 // IR sensors
-DigitalIn IR_sensor (PTB0);
+DigitalIn IR_sensor (PTC1); // FIX
 // Needs to enable pull up
 // Buzzer 
-Buzzer buzzer (PTB1);
-float freq;
+Buzzer buzzer (PTB3); // FIX
 // LCD display
-    // (rs, rw, e, d0, d1, d2, d3, LCDType type=LCD16x2)
-TextLCD lcd (PTA2, PTA4, PTA5, PTD4, PTD5, PTD6, PTD7);
+            // (rs, rw, e,       d0, d1, d2, d3, LCDType type=LCD16x2)
+TextLCD lcd (D0, D4, D5, PTD4, PTD5, PTD6, PTD7);
 // Keypad
 Keypad kpad (PTC12, PTC10, PTC6, PTC5, PTC4, PTC3, PTC0, PTC7);
+// Transmission
+                // MSB -> LSB, EN
+Transmitter trans (PTE21, PTE22, PTE23, PTE29, PTE30, PTE20);
 
 int main(){
 /* Global 
@@ -67,11 +70,10 @@ int main(){
  _| |_| | | | | |_| | (_| | | |/ / (_| | |_| | (_) | | | |
 |_____|_| |_|_|\__|_|\__,_|_|_/___\__,_|\__|_|\___/|_| |_|                                                                                                                
 */
-    IR_sensor.mode(PullUp);
+    //IR_sensor.mode(PullUp);
+    
+    //lcd.cls();
 
-
-
-    int i;
 /*
  _  
 | |   ___  ___ _ __ 
@@ -105,17 +107,6 @@ int main(){
         }
     }
 
-
-    slaveReceive();
-
-    char key;
-    int released = 1;
-    
-    // CS -> Chip Select
-    //MFRC522 RfChip (PTD2, PTD3, PTD1, SPI_CS, PTD8);
-
-    //I2C *i2cPort = new I2C(I2C_SDA, I2C_SDA);
-    
 }
 
 /*
@@ -126,21 +117,20 @@ int main(){
 */
 
 void idle_State (){
-    char key;
-    int released = 1;
+    
+    // Clear dislpay output
+    lcd.cls();
 
     while (true) {
-        key = kpad.ReadKey();                   //read the current key pressed
-
-        if(key == '\0')
-            released = 1;                       //set the flag when all keys are released
-        
-        if((key != '\0') && (released == 1)) {  //if a key is pressed AND previous key was released
-            lcd.printf("%c", key);           
-            released = 0;                       //clear the flag to indicate that key is still pressed
+        // If a key is pressed, then we change state
+        if (kpad.ReadKey() != '\0'){
             state++;
             break;
         }
+        // Toggle LED to inidicate user the machine is ON and IDLE
+        led = !led;
+        // LEB blink effect
+        ThisThread::sleep_for(500ms);   
     }
 
 }
@@ -148,9 +138,11 @@ void menu1_State (){
     char key;
     int released = 1;
 
-    lcd.printf("%c", key); 
+    // Clear previous ouputs
     lcd.cls();
-    //i2c_byte_read(i2c_t *obj, int last)
+    // Display state's menu
+    lcd.printf("Choose file: ");
+    lcd.printf("         A ->");  
 
     while (true) {
         key = kpad.ReadKey();                   //read the current key pressed
@@ -158,44 +150,81 @@ void menu1_State (){
         if(key == '\0')
             released = 1;                       //set the flag when all keys are released
         
-        if((key != '1') && (released == 1)) {  //if a key is pressed AND previous key was released
-                      
-            released = 0;                       //clear the flag to indicate that key is still pressed
+        // Change screen until A is pressed
+        if((key == 'A') && (released == 1)) {   
+            released = 0;                       
             state++;
             break;
         }
-
-        if((key != '2') && (released == 1)) {  //if a key is pressed AND previous key was released
-                     
-            released = 0;                       //clear the flag to indicate that key is still pressed
-            state++;
-            break;
-        }
-
-
     }
 }
 void menu2_a_State (){
+    
+    // Clear previous outputs
+    lcd.cls();
+    // Display state's menu
+    lcd.printf("1.- Square ");
+    lcd.printf("2.- Triangle");  
+    
+    char key;
+    int released = 1;
 
-}
-void menu2_b_State (){
+    while (true) {
+        key = kpad.ReadKey();                   //read the current key pressed
+ 
+        if(key == '\0')
+            released = 1;                       //set the flag when all keys are released
+        
+        if((key == '1') && (released == 1)) {   //if key 1 is pressed, then send file 1 to print
+            released = 0;
+            // To enable rising edge
+            trans.enable_data();
+            // Actual bits
+            trans.send(0, 0, 0, 0, 1);
+            // Give some time for the rPi to register the input
+            wait_ns(50);
+            // Turn off enable
+            trans.disable_data();                       
+            state++;
+            break;
+        }
 
+        if((key == '2') && (released == 1)) {  //if key 2 is pressed, then send file 2 to print
+            released = 0;
+            trans.enable_data();
+            trans.send(0, 0, 0, 0, 0);
+            wait_ns(50);
+            trans.disable_data();                       
+            state++;
+            break;
+        }
+    }
 }
+
 void printing_State (){
     
+    // Clear previous screen
+    lcd.cls();
+    // Display state's menu
+    lcd.printf(" Place sheet to begin");
+    lcd.printf(" with print"); 
     // Wait for sheet
     do {
-        lcd.cls();
-        lcd.printf(" Place sheet to begin");
-        lcd.printf(" with print"); 
-        
+        // Make sound while no sheet
+        buzzer.makeBeep(1000);
     }while (!IR_sensor);
 
+    // Stop sound
+    buzzer.silence();
 
     // Set motors to initial position
     do {
-        //send("Motor 1 left")
-        //send("Motor 2 left")
+        trans.enable_data();
+        // Send wich motor to move, or keep static
+        trans.send(1, 0, 0, lswitch_X, lswitch_Y);
+        wait_ns(50);
+        trans.disable_data();  
+
     }while (!lswitch_X | !lswitch_Y);
 
     int released = 1;
@@ -203,68 +232,70 @@ void printing_State (){
     bool print = true;
 
     while (true) {
-        if (receive () ==  "Finished"){
+        if (/*receive ()*/ "HOLA" ==  "Finished"){
             state = STATE_SUCC;
             break;
         }
         
-        key = kpad.ReadKey();                   //read the current key pressed
+        key = kpad.ReadKey();                   
  
         if(key == '\0')
-            released = 1;                       //set the flag when all keys are released
+            released = 1;                       
         
-        if((key != '*') && (released == 1) ) {  //if a key is pressed AND previous key was released
-                      
-            released = 0;                       //clear the flag to indicate that key is still pressed
-            send("Pause, !print");
+        if(  ((key == '*') && (released == 1)) || IR_sensor ) {  
+            released = 0;                       
+            trans.enable_data();
+            // Send stop message
+            trans.send(1, 0, 0, 0, 0);
+            wait_ns(50);
+            trans.disable_data(); 
+
             state++;
             break;
         }
-        if (IR_sensor){
-            send("continue print");
-        }
-
     }
 }
 void pause_State (){
+
+    // Clear previous screen
     lcd.cls();
-    lcd.printf(" Print paused");
+    // Display state's menu
+    lcd.printf("Print paused");
+    
+    int released = 1;
+        char key;
+    
+    while (true) {
+        
+        key = kpad.ReadKey();                   
+ 
+        if(key == '\0')
+            released = 1;                       
+        
+        if(  ((key != '*') && (released == 1)) || IR_sensor ) {  
+            released = 0;                       
+            trans.enable_data();
+            // Send resume message TODO
+            trans.send(1, 0, 0, 0, 0);
+            wait_ns(50);
+            trans.disable_data(); 
+            // Restart print
+            state = STATE_PRINTING;
+            break;
+        }
+    }
      
 }
 void succ_pro_State (){
+
+    // Clear previous screen
     lcd.cls();
-    lcd.printf(" Print compleated");
+    // Display state's menu
+    lcd.printf("Print compleated");
+    
+    // Make final sound
+    buzzer.makeBeep(10000);
+    ThisThread::sleep_for(50ms);
+    buzzer.silence();
 }
 
-
-void slaveReceive(){
-
-                    //SDA, SCL
-    I2CSlave slave(PTC2, PTC1);
-
-    char buf[10];
-    char msg[] = "Slave!";
-
-    slave.address(0xA0);
-
-
-    while (1) {
-        int i = slave.receive();
-        switch (i) {
-            case I2CSlave::ReadAddressed:
-                slave.write(msg, strlen(msg) + 1); // Includes null char
-                break;
-            case I2CSlave::WriteGeneral:
-                slave.read(buf, 10);
-                printf("Read G: %s\n", buf);
-                break;
-            case I2CSlave::WriteAddressed:
-                slave.read(buf, 10);
-                printf("Read A: %s\n", buf);
-                break;
-        }
-        for (int i = 0; i < 10; i++) {
-            buf[i] = 0;    // Clear buffer
-        }
-    }
-}
